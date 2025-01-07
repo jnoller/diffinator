@@ -1,0 +1,83 @@
+description: "Configuration for PyTorch repository"
+repository:
+  owner: pytorch
+  name: pytorch
+  version_type: tag  # can be 'tag' or 'commit'
+  output_mode: raw  # Add this line to enable raw output mode
+
+repositories:
+  pytorch/pytorch:
+    groups:
+      pytorch:
+        name: PyTorch
+        keywords:
+          - pytorch
+
+      mps:
+        name: MPS Support
+        keywords:
+          - mps
+      
+      rocm:
+        name: ROCm Support
+        keywords:
+          - rocm
+
+      onnx:
+        name: ONNX Support
+        keywords:
+          - onnx
+
+      intel:
+        name: Intel GPU/XPU
+        keywords:
+          - intel gpu
+
+      traceable_fsdp:
+        name: Traceable FSDP
+        keywords:
+          - traceable fsdp
+
+      inductor:
+        name: Inductor
+        keywords:
+          - inductor
+          - "[inductor]"
+
+      compiler:
+        name: Compiler Stack
+        keywords:
+          - dynamo
+          - compile
+
+      cuda:
+        name: CUDA/GPU Support
+        keywords:
+          - cuda
+
+      distributed:
+        name: Distributed
+        keywords:
+          - distributed
+
+      docs:
+        name: Documentation
+        keywords:
+          - doc
+          - docs
+          - documentation
+          - comment
+          - note
+          - readme
+          - getting started
+          - tutorial
+
+      build:
+        name: Build System
+        keywords:
+          - build
+          - ci
+
+    important_files:
+      - setup.py
+      - CMakeLists.txt

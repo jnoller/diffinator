@@ -1,4 +1,6 @@
-# Example Report using command `diffinator -c llamacpp --output markdown b4273 b4418`
+# Example Report (llama.cpp)
+
+Command: `diffinator -c llamacpp --output markdown b4273 b4418`
 
 Analyzing changes between b4273 and b4418:
 

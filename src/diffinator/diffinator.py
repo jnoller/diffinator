@@ -154,18 +154,17 @@ class MarkdownFormatter(OutputFormatter):
             print(f"\n### {file['name']}", file=self.output)
             print(f"Status: {file['status']} | +{file['additions']}/-{file['deletions']}", file=self.output)
             if file.get('changes') and self.show_diff:  # Only show diff if enabled
+                # Always use diff format for changes
+                print("\n```diff", file=self.output)
                 if isinstance(file['changes'], str) and file['changes'].startswith('@@ '):
-                    print("\n```diff", file=self.output)
                     changes = file['changes'].splitlines()
                     for line in changes:
                         if not line.startswith('\\'):
                             print(line, file=self.output)
-                    print("```", file=self.output)
                 else:
-                    print("\n```", file=self.output)
                     print(file['changes'], file=self.output)
-                    print("```", file=self.output)
-            print("", file=self.output)
+                print("```", file=self.output)
+                print("", file=self.output)
 
 class Diffinator:
     def __init__(self, token: Optional[str] = None, owner: str = None, 
@@ -303,7 +302,8 @@ class Diffinator:
             categorized = False
             
             for group in self.change_groups:
-                if any(keyword in line_lower for keyword in group.keywords):
+                # Check if line starts with any of the keywords
+                if any(line_lower.startswith(keyword.lower()) for keyword in group.keywords):
                     group.changes.append(line)
                     categorized = True
                     break
@@ -375,42 +375,22 @@ class Diffinator:
 
     def print_results(self, categories: Dict[str, List[str]], comparison: CommitComparison, file_changes: Dict[str, List[str]]):
         """Print analysis results using the configured formatter"""
-        # Process commit groups
-        for commit in comparison.commits:
-            # Get and clean up the first line of the commit message
-            message = commit.commit.message.splitlines()[0]
-            if ':' in message:
-                prefix, rest = message.split(':', 1)
-                message = f"{prefix.strip()}: {rest.strip()}"
-            
-            message_lower = message.lower()
-            categorized = False
-            for group_id, group_config in self.groups.items():
-                if any(message_lower.startswith(keyword) for keyword in group_config['keywords']):
-                    self.commit_groups[group_id].append(message)  # Add the cleaned message
-                    categorized = True
-                    break
-            if not categorized:
-                self.commit_groups["other"].append(message)  # Add the cleaned message
-        
-        # Use formatter to output results with proper group names
+        # Print summary
         self.formatter.print_summary(
             len(comparison.commits),
             len(comparison.files),
             len(file_changes['important'])
         )
         
-        # Convert commit groups to use display names
-        named_commit_groups = {
-            **{
-                self.groups[group_id]['name']: commits
-                for group_id, commits in self.commit_groups.items()
-                if group_id != 'other'
-            },
-            'Other': self.commit_groups['other']  # Always include 'other' group
-        }
-            
-        self.formatter.print_commits_by_type(named_commit_groups)
+        # If raw mode, just print commits without categorization
+        if hasattr(self.config, 'output_mode') and self.config['output_mode'] == 'raw':
+            self.formatter.print_commits_by_type({'Raw Changes': [
+                commit.commit.message.splitlines()[0] 
+                for commit in comparison.commits
+            ]})
+            return
+        
+        # Otherwise, only show the Changes by Category (removing Commits by Type)
         self.formatter.print_changes_by_category(categories)
         self.formatter.print_file_changes(file_changes['important'])
         
@@ -444,11 +424,8 @@ class Diffinator:
         
         return "\n".join(notes)
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Analyze changes between GitHub repository releases or commits",
-        epilog="Example: diffinator -c llamacpp v1.0 v2.0"
-    )
+def parse_args():
+    parser = argparse.ArgumentParser(description='Generate changelog between two git refs')
     parser.add_argument("version_a", help="First version/commit to compare", nargs='?')
     parser.add_argument("version_b", help="Second version/commit to compare", nargs='?')
     parser.add_argument("-t", "--token", help="GitHub API token (optional - only needed to avoid rate limits)")
@@ -463,8 +440,23 @@ def main():
                        help="Omit diff output from file changes")
     parser.add_argument("--list-configs", action="store_true",
                        help="List available bundled configurations")
-    
-    args = parser.parse_args()
+    parser.add_argument('--raw', action='store_true', help='Output raw uncategorized list of changes')
+    return parser.parse_args()
+
+def generate_report(config, old_ref, new_ref, args):
+    # ... existing code ...
+
+    if args.raw:
+        print("\nRaw Changes:")
+        print("============")
+        for commit in commits:
+            print(f"  • {commit.title} ({commit.sha})")
+        return
+
+    # ... rest of the existing report generation code ...
+
+def main():
+    args = parse_args()
     
     # Handle listing configs
     if args.list_configs:
@@ -485,14 +477,14 @@ def main():
         else:
             print("No bundled configurations found.")
             return 1
-    
+
     # For comparison operations, require config and version arguments
     if not args.config:
         parser.error("the following arguments are required: -c/--config")
     
     if not args.version_a or not args.version_b:
         parser.error("version_a and version_b are required for comparison")
-    
+
     try:
         # Load config first to get owner and repo
         # First check if it's a bundled config
@@ -545,15 +537,26 @@ def main():
         
         # Get version information based on type
         if version_type == 'tag':
-            release_a = diffinator.get_release(args.version_a)
-            release_b = diffinator.get_release(args.version_b)
             comparison = diffinator.compare_releases(args.version_a, args.version_b)
-            release_notes = release_b.body if release_b.body else ""
+            if args.raw:
+                print("\nRaw Changes:")
+                print("============")
+                for commit in comparison.commits:
+                    message = commit.commit.message.splitlines()[0]
+                    print(f"  • {message}")
+                return
         else:
             comparison = diffinator.compare_commits(args.version_a, args.version_b)
-            release_notes = diffinator.get_commit_notes(comparison)
+            if args.raw:
+                print("\nRaw Changes:")
+                print("============")
+                for commit in comparison.commits:
+                    message = commit.commit.message.splitlines()[0]
+                    print(f"  • {message}")
+                return
         
-        # Analyze changes
+        # If not raw output, continue with normal processing
+        release_notes = diffinator.get_commit_notes(comparison)
         categories = diffinator.categorize_changes(release_notes)
         file_changes = diffinator.analyze_file_changes(comparison)
         
