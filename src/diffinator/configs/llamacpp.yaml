@@ -1,0 +1,137 @@
+description: "Configuration for llama.cpp repository"
+repository:
+  owner: ggerganov
+  name: llama.cpp
+  version_type: tag  # can be 'tag' or 'commit'
+
+repositories:
+  ggerganov/llama.cpp:
+    groups:
+      llama-run:
+        name: Llama-Run
+        keywords:
+          - llama-run
+      llama:
+        name: Llama
+        keywords:
+          - llama
+      common:
+        name: Common
+        keywords:
+          - common
+      convert:
+        name: Convert
+        keywords:
+          - convert
+      server:
+        name: Server
+        keywords:
+          - server
+          - api
+          - endpoint
+          - http
+      rpc-server:
+        name: RPC-Server
+        keywords:
+          - rpc
+          - rpc-server
+      gguf:
+        name: GGUF
+        keywords:
+          - gguf
+          - gguf-py
+          - ggml-backend
+      ggml:
+        name: GGML
+        keywords:
+          - ggml
+          - tensor
+          - quantize
+          - matrix
+          - ggml-backend
+      models:
+        name: Models
+        keywords:
+          - model
+          - weight
+          - checkpoint
+      performance:
+        name: Performance
+        keywords:
+          - performance
+          - speed
+          - faster
+          - optimize
+      bug_fixes:
+        name: Bug Fixes
+        keywords:
+          - fix
+          - bug
+          - issue
+          - crash
+      vulkan:
+        name: Vulkan
+        keywords:
+          - vulkan
+          - vk
+      syscl:
+        name: SYSCL
+        keywords:
+          - SYCL
+          - sycl
+      cuda:
+        name: CUDA
+        keywords:
+          - cuda
+          - gpu
+      metal:
+        name: Metal
+        keywords:
+          - metal
+          - gpu
+      scripts:
+        name: Scripts
+        keywords:
+          - scripts
+      llava:
+        name: Llava
+        keywords:
+          - llava
+      build:
+        name: Build System
+        keywords:
+          - cmake
+          - build
+          - nix
+          - ci
+      tests:
+        name: Tests
+        keywords:
+          - test
+          - benchmark
+      docs:
+        name: Documentation
+        keywords:
+          - doc
+          - readme
+          - comment
+
+    important_files:
+      - gguf-py/pyproject.toml
+      - pyproject.toml
+      - requirements/requirements-all.txt
+      - requirements/requirements-compare-llama-bench.txt
+      - requirements/requirements-convert_hf_to_gguf_update.txt
+      - requirements/requirements-convert_hf_to_gguf.txt
+      - requirements/requirements-convert_legacy_llama.txt
+      - requirements/requirements-convert_llama_ggml_to_gguf.txt
+      - requirements/requirements-convert_lora_to_gguf.txt
+      - requirements/requirements-pydantic.txt
+      - requirements/requirements-test-tokenizer-random.txt
+      - CMakeLists.txt
+      - CMakePresets.json
+      - convert_lora_to_gguf.py
+      - ggml/src/ggml-cpu/ggml-cpu.c
+      - tests/test-backend-ops.cpp
+      - ggml/src/ggml-metal/ggml-metal.m
+      - ggml/src/ggml-blas/CMakeLists.txt 

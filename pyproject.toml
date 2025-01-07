@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "diffinator"
+version = "0.1.0"
+description = "A tool to analyze and compare GitHub repository releases and commits"
+readme = "README.md"
+authors = [
+    { name = "Jesse Noller", email = "jnoller@anaconda.com" }
+]
+license = { text = "BSD-3-Clause" }
+requires-python = ">=3.8"
+dependencies = [
+    "githubkit",
+    "rich",
+    "pyyaml",
+]
+
+[project.scripts]
+diffinator = "diffinator.diffinator:main"
+
+[project.urls]
+Homepage = "https://github.com/jnoller/diffinator"
+Repository = "https://github.com/jnoller/diffinator"
+
+[tool.setuptools]
+packages = ["diffinator"]
+package-dir = {"" = "src"}
+[tool.setuptools.package-data]
+diffinator = ["configs/*.yaml"]

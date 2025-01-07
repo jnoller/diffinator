@@ -1,0 +1,51 @@
+change_groups:
+  - name: Features
+    keywords:
+      - feature
+      - add
+      - new
+      - support
+  - name: Bug Fixes
+    keywords:
+      - fix
+      - bug
+      - issue
+      - crash
+  - name: Documentation
+    keywords:
+      - doc
+      - readme
+      - example
+  - name: Dependencies
+    keywords:
+      - dependency
+      - upgrade
+      - bump
+      - requirement
+  - name: Performance
+    keywords:
+      - performance
+      - optimize
+      - speed
+      - faster
+
+important_files:
+  - CMakeLists.txt
+  - requirements.txt
+  - setup.py
+  - pyproject.toml
+  - Cargo.toml
+  - package.json
+
+commit_groups:
+  - feature
+  - fix
+  - docs
+  - deps
+  - perf
+  - other 
+
+description: "Default configuration for repository analysis"
+repositories:
+  default:
+    groups: 
