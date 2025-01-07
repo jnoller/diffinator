@@ -6,7 +6,7 @@
 
 A tool that analyzes and categorizes changes between GitHub commits or releases. It groups commits by type, tracks important file changes, and generates structured reports in console or markdown format. The tool is configurable through YAML files, allowing you to define custom categorization rules and important files to monitor for a specific project on github.
 
-Currently it includes the configuration (`configs/llamacpp.yaml`) for analyzing changes between two releases of [llama.cpp][1].
+Currently it includes the configuration (`configs/llamacpp.yaml`) for analyzing changes between two releases of [llama.cpp](https://github.com/ggerganov/llama.cpp).
 
 ## Key Features
 
@@ -113,6 +113,3 @@ diffinator -c llamacpp --output markdown b4273 b4418
 ```
 
 Full example report see [example-report.md](docs/example-report.md)
-
-
-[1] https://github.com/ggerganov/llama.cpp
