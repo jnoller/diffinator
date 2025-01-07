@@ -8,40 +8,49 @@ repository:
 repositories:
   pytorch/pytorch:
     groups:
+      bug_fixes:
+        name: Bug Fixes
+        keywords:
+          - "[bug]"
+          - "[fix]"
+          - fix
+
+
       pytorch:
         name: PyTorch
         keywords:
-          - pytorch
+          - "[pytorch]"
 
       mps:
         name: MPS Support
         keywords:
-          - mps
+          - "[mps]"
       
       rocm:
         name: ROCm Support
         keywords:
-          - rocm
+          - "[rocm]"
 
       onnx:
         name: ONNX Support
         keywords:
-          - onnx
+          - "[onnx]"
 
       intel:
         name: Intel GPU/XPU
         keywords:
-          - intel gpu
+          - "[intel gpu]"
+          - "[intel triton"
 
       traceable_fsdp:
         name: Traceable FSDP
         keywords:
-          - traceable fsdp
+          - "[traceable fsdp]"
+          - "[traceable fsdp2]"
 
       inductor:
         name: Inductor
         keywords:
-          - inductor
           - "[inductor]"
 
       compiler:
@@ -58,13 +67,14 @@ repositories:
       distributed:
         name: Distributed
         keywords:
-          - distributed
+          - "[distributed]"
 
       docs:
         name: Documentation
         keywords:
           - doc
           - docs
+          - "[docs]"
           - documentation
           - comment
           - note
@@ -76,7 +86,8 @@ repositories:
         name: Build System
         keywords:
           - build
-          - ci
+          - "[ci]"
+          - "[cd]"
 
     important_files:
       - setup.py
