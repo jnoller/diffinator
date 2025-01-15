@@ -431,6 +431,7 @@ def parse_args():
     parser.add_argument("-t", "--token", help="GitHub API token (optional - only needed to avoid rate limits)")
     parser.add_argument("-c", "--config", dest="config",
                        help="Name of bundled config (e.g. 'llamacpp') or path to custom YAML config file")
+    parser.add_argument("-r", "--repo", help="GitHub repository in the format 'owner/repo' (e.g. 'tensorflow/tensorflow')")
     parser.add_argument("-v", "--version-type", choices=['tag', 'commit'], 
                        help="Specify whether versions are tags or commits (overrides config file)")
     parser.add_argument("-o", "--output", choices=['console', 'markdown'], default='console',
@@ -478,9 +479,9 @@ def main():
             print("No bundled configurations found.")
             return 1
 
-    # For comparison operations, require config and version arguments
-    if not args.config:
-        parser.error("the following arguments are required: -c/--config")
+    # For comparison operations, require version arguments and either config or repo
+    if not args.config and not args.repo:
+        parser.error("either -c/--config or -r/--repo is required")
     
     if not args.version_a or not args.version_b:
         parser.error("version_a and version_b are required for comparison")
@@ -488,7 +489,10 @@ def main():
     try:
         # Load config first to get owner and repo
         # First check if it's a bundled config
-        bundled_path = Path(__file__).parent / "configs" / f"{args.config}.yaml"
+        if args.repo and not args.config:
+            bundled_path = Path(__file__).parent / "configs" / "defaults.yaml"
+        else:
+            bundled_path = Path(__file__).parent / "configs" / f"{args.config}.yaml"
         
         if bundled_path.exists():
             config_path = bundled_path
@@ -511,16 +515,25 @@ def main():
             )
         
         with open(config_path, 'r') as f:
-            repo_config = yaml.safe_load(f)
+            config = yaml.safe_load(f)
         
-        if 'repository' not in repo_config:
-            raise ValueError("Configuration file must contain 'repository' section with 'owner' and 'name'")
-            
-        owner = repo_config['repository']['owner']
-        repo = repo_config['repository']['name']
+        if args.repo and not args.config:
+            owner, repo = args.repo.split('/')
+            # Add repository-specific information
+            config['repository'] = {
+                'owner': owner,
+                'name': repo,
+                'version_type': args.version_type or 'tag'
+            }
+        else:
+            if 'repository' not in config:
+                raise ValueError("Configuration file must contain 'repository' section with 'owner' and 'name'")
+                
+            owner = config['repository']['owner']
+            repo = config['repository']['name']
         
         # Get version type from args or config
-        version_type = args.version_type or repo_config['repository'].get('version_type', 'tag')
+        version_type = args.version_type or config['repository'].get('version_type', 'tag')
         
         # Set up output
         output = open(args.output_file, 'w') if args.output_file else sys.stdout
@@ -538,22 +551,16 @@ def main():
         # Get version information based on type
         if version_type == 'tag':
             comparison = diffinator.compare_releases(args.version_a, args.version_b)
-            if args.raw:
-                print("\nRaw Changes:")
-                print("============")
-                for commit in comparison.commits:
-                    message = commit.commit.message.splitlines()[0]
-                    print(f"  • {message}")
-                return
         else:
             comparison = diffinator.compare_commits(args.version_a, args.version_b)
-            if args.raw:
-                print("\nRaw Changes:")
-                print("============")
-                for commit in comparison.commits:
-                    message = commit.commit.message.splitlines()[0]
-                    print(f"  • {message}")
-                return
+
+        if args.raw:
+            print("\nRaw Changes:")
+            print("============")
+            for commit in comparison.commits:
+                message = commit.commit.message.splitlines()[0]
+                print(f"  • {message}")
+            return
         
         # If not raw output, continue with normal processing
         release_notes = diffinator.get_commit_notes(comparison)
