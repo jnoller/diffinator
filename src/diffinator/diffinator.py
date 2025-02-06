@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import Dict, List, Optional, TextIO
+from typing import Dict, List, Optional, TextIO, TypedDict, Union
 import sys
 import argparse
 from dataclasses import dataclass
@@ -130,7 +130,7 @@ class MarkdownFormatter(OutputFormatter):
         print(f"- Total commits: {total_commits}", file=self.output)
         print(f"- Files changed: {total_files}", file=self.output)
         print(f"- Important files modified: {important_files}", file=self.output)
-    
+
     def print_commits_by_type(self, commit_groups: Dict[str, List[str]]):
         print("\n## Commits by Type", file=self.output)
         for group, commits in commit_groups.items():
@@ -165,6 +165,10 @@ class MarkdownFormatter(OutputFormatter):
                     print(file['changes'], file=self.output)
                 print("```", file=self.output)
                 print("", file=self.output)
+
+class TagMatch(TypedDict):
+    exact: Optional[str]      # Store the exact match if found
+    partial: List[str]        # Store partial/substring matches
 
 class Diffinator:
     def __init__(self, token: Optional[str] = None, owner: str = None, 
@@ -261,29 +265,132 @@ class Diffinator:
             }
         }
 
-    def get_release(self, tag: str) -> Release:
+    def _parse_version(self, version: str) -> List[str]:
+        """Split version into a list of strings by common delimiters, and remove prefixes"""
+        version = version.replace('-', '.').replace('_', '.').replace('+', '.').split('.')
+        # Make everything lower-case to remove case sensitivity, and split chunks containing rc without delimiters as a special case
+        version_ = []
+        for chunk in version:
+            chunk = chunk.lower()
+            if 'rc' in chunk:
+                pre_rc, post_rc = chunk.split('rc', 1)
+                if pre_rc:
+                    version_.append(pre_rc)
+                version_.append('rc' + post_rc)
+            else:
+                version_.append(chunk)
+        version = version_
+        # Remove prefixes
+        first_digit_idx = next((i for i, v in enumerate(version) if v.isdigit()), None)
+        if first_digit_idx is not None:
+            version = version[first_digit_idx:]
+
+        return version
+
+    def _trim_trailing_zeros_in_sublists(self, version: List[str]) -> List[str]:
+        """Trim trailing zeros from all numerical sub-sequences in a version list."""
+        """ This is so that if the user inputs '1.0-rc1', it will match '1.0.0-rc1', and vice-versa."""
+        for i in range(len(version)-1, 0, -1):
+            if version[i] == '0' and (i == len(version) - 1 or not version[i+1].isdigit()):
+                version.pop(i)
+        return version
+
+    def _is_sublist(self, smaller: List[str], larger: List[str]) -> bool:
+        """Check if smaller list appears as a contiguous subsequence in larger list"""
+        for i in range(len(larger) - len(smaller) + 1):
+            if smaller == larger[i:i+len(smaller)]:
+                return True
+
+        return False
+
+    def _check_tag_match(self, tag: str, tag_parsed: List[str], search_parsed: List[str], matches: Dict[str, TagMatch], key: str) -> None:
+        """Check if the version lists are an exact match, an exact match ignoring prefixes, or a partial match."""
+        if search_parsed == tag_parsed:
+            matches[key]["exact"] = tag
+        else:
+            trimmed_tag = self._trim_trailing_zeros_in_sublists(tag_parsed)
+            trimmed_search = self._trim_trailing_zeros_in_sublists(search_parsed.copy())
+            if self._is_sublist(trimmed_search, trimmed_tag):
+                matches[key]["partial"].append(tag)
+
+    def _find_matching_tags(self, base: str, head: str) -> tuple[List[str], List[str]]:
         """
-        Get release information for a specific tag
-        Uses: GET /repos/{owner}/{repo}/releases/tags/{tag}
+        Find matching tags for both base and head versions simultaneously.
+        Returns tuple of (base_match, head_match).
         """
-        response: Response[Release] = self.gh.rest.repos.get_release_by_tag(
-            owner=self.owner,
-            repo=self.repo,
-            tag=tag
-        )
-        return response.parsed_data
-    
+
+        base_parsed = self._parse_version(base)
+        head_parsed = self._parse_version(head)
+        matches: Dict[str, TagMatch] = {
+            "base": {"exact": None, "partial": []},
+            "head": {"exact": None, "partial": []}
+        }
+
+        page = 1
+        while True:
+            # Get all tags using pagination
+            response = self.gh.rest.repos.list_tags(
+                owner=self.owner,
+                repo=self.repo,
+                page=page
+            )
+            tags_page = response.parsed_data
+            if not tags_page:
+                break
+            tags = [t.name for t in tags_page]
+            page += 1
+
+            # go through tags returned
+            for tag in tags:
+                tag_parsed = self._parse_version(tag)
+
+                # compare split version of base and head with each tag using _parse_version
+                if not matches["base"]["exact"]:
+                    self._check_tag_match(tag, tag_parsed, base_parsed, matches, "base")
+                if not matches["head"]["exact"]:
+                    self._check_tag_match(tag, tag_parsed, head_parsed, matches, "head")
+
+                # if both have exact matches, return immediately
+                if matches["base"]["exact"] and matches["head"]["exact"]:
+                    return ([matches["base"]["exact"]], [matches["head"]["exact"]])
+
+        # Return exact matches if they exist, otherwise return partial matches
+        base_matches = [matches["base"]["exact"]] if matches["base"]["exact"] else matches["base"]["partial"]
+        head_matches = [matches["head"]["exact"]] if matches["head"]["exact"] else matches["head"]["partial"]
+        return (base_matches, head_matches)
+
     def compare_releases(self, base: str, head: str) -> CommitComparison:
         """
         Compare two releases
         Uses: GET /repos/{owner}/{repo}/compare/{basehead}
         Note: basehead format is 'base...head'
         """
-        response: Response[CommitComparison] = self.gh.rest.repos.compare_commits(
-            owner=self.owner,
-            repo=self.repo,
-            basehead=f"{base}...{head}"
-        )
+        try:
+            response: Response[CommitComparison] = self.gh.rest.repos.compare_commits(
+                owner=self.owner,
+                repo=self.repo,
+                basehead=f"{base}...{head}"
+            )
+        except Exception as e:
+            if "404" in str(e):
+                base_match, head_match = self._find_matching_tags(base, head)
+                if not base_match:
+                    raise ValueError(f"Could not find matching tag for '{base}'")
+                if not head_match:
+                    raise ValueError(f"Could not find matching tag for '{head}'")
+                elif len(base_match) > 1:
+                    raise ValueError(f"Found multiple matches for '{base}': {base_match}")
+                elif len(head_match) > 1:
+                    raise ValueError(f"Found multiple matches for '{head}': {head_match}")
+                else:
+                    print(f"Failed to find exact tags, comparing '{base_match[0]}' with '{head_match[0]}'")
+                response = self.gh.rest.repos.compare_commits(
+                    owner=self.owner,
+                    repo=self.repo,
+                    basehead=f"{base_match[0]}...{head_match[0]}"
+                )
+            else:
+                raise
         return response.parsed_data
 
     def categorize_changes(self, release_notes: str) -> Dict[str, List[str]]:
@@ -431,6 +538,7 @@ def parse_args():
     parser.add_argument("-t", "--token", help="GitHub API token (optional - only needed to avoid rate limits)")
     parser.add_argument("-c", "--config", dest="config",
                        help="Name of bundled config (e.g. 'llamacpp') or path to custom YAML config file")
+    parser.add_argument("-r", "--repo", help="GitHub repository in the format 'owner/repo' (e.g. 'tensorflow/tensorflow')")
     parser.add_argument("-v", "--version-type", choices=['tag', 'commit'], 
                        help="Specify whether versions are tags or commits (overrides config file)")
     parser.add_argument("-o", "--output", choices=['console', 'markdown'], default='console',
@@ -478,9 +586,9 @@ def main():
             print("No bundled configurations found.")
             return 1
 
-    # For comparison operations, require config and version arguments
-    if not args.config:
-        parser.error("the following arguments are required: -c/--config")
+    # For comparison operations, require version arguments and either config or repo
+    if not args.config and not args.repo:
+        parser.error("either -c/--config or -r/--repo is required")
     
     if not args.version_a or not args.version_b:
         parser.error("version_a and version_b are required for comparison")
@@ -488,7 +596,10 @@ def main():
     try:
         # Load config first to get owner and repo
         # First check if it's a bundled config
-        bundled_path = Path(__file__).parent / "configs" / f"{args.config}.yaml"
+        if args.repo and not args.config:
+            bundled_path = Path(__file__).parent / "configs" / "defaults.yaml"
+        else:
+            bundled_path = Path(__file__).parent / "configs" / f"{args.config}.yaml"
         
         if bundled_path.exists():
             config_path = bundled_path
@@ -511,16 +622,25 @@ def main():
             )
         
         with open(config_path, 'r') as f:
-            repo_config = yaml.safe_load(f)
+            config = yaml.safe_load(f)
         
-        if 'repository' not in repo_config:
-            raise ValueError("Configuration file must contain 'repository' section with 'owner' and 'name'")
-            
-        owner = repo_config['repository']['owner']
-        repo = repo_config['repository']['name']
+        if args.repo and not args.config:
+            owner, repo = args.repo.split('/')
+            # Add repository-specific information
+            config['repository'] = {
+                'owner': owner,
+                'name': repo,
+                'version_type': args.version_type or 'tag'
+            }
+        else:
+            if 'repository' not in config:
+                raise ValueError("Configuration file must contain 'repository' section with 'owner' and 'name'")
+                
+            owner = config['repository']['owner']
+            repo = config['repository']['name']
         
         # Get version type from args or config
-        version_type = args.version_type or repo_config['repository'].get('version_type', 'tag')
+        version_type = args.version_type or config['repository'].get('version_type', 'tag')
         
         # Set up output
         output = open(args.output_file, 'w') if args.output_file else sys.stdout
@@ -538,28 +658,22 @@ def main():
         # Get version information based on type
         if version_type == 'tag':
             comparison = diffinator.compare_releases(args.version_a, args.version_b)
-            if args.raw:
-                print("\nRaw Changes:")
-                print("============")
-                for commit in comparison.commits:
-                    message = commit.commit.message.splitlines()[0]
-                    print(f"  • {message}")
-                return
         else:
             comparison = diffinator.compare_commits(args.version_a, args.version_b)
-            if args.raw:
-                print("\nRaw Changes:")
-                print("============")
-                for commit in comparison.commits:
-                    message = commit.commit.message.splitlines()[0]
-                    print(f"  • {message}")
-                return
+
+        if args.raw:
+            print("\nRaw Changes:")
+            print("============")
+            for commit in comparison.commits:
+                message = commit.commit.message.splitlines()[0]
+                print(f"  • {message}")
+            return
         
         # If not raw output, continue with normal processing
         release_notes = diffinator.get_commit_notes(comparison)
         categories = diffinator.categorize_changes(release_notes)
         file_changes = diffinator.analyze_file_changes(comparison)
-        
+
         # Print results
         print(f"\nAnalyzing changes between {args.version_a} and {args.version_b}:")
         diffinator.print_results(categories, comparison, file_changes)
